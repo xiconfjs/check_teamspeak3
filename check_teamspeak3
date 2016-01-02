@@ -1,0 +1,89 @@
+#!/usr/bin/perl
+
+# Copyright 2016 XiCoN-FJS- @ fjs@xicon.de
+#
+# Version: 0.1 (2016-01-02)
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+use strict;
+use warnings;
+use IO::Socket;
+use IO::Socket::Timeout;
+
+sub usage_die()
+{
+	die "Usage: ".$0." <host> <port> <timeout_in_secs>\n";
+}
+
+my ($host, $port, $timeout) = @ARGV;
+
+if (not defined $host)
+{
+	usage_die();
+}
+
+if (not defined $port)
+{
+	usage_die();
+}
+
+if (not defined $timeout)
+{
+	$timeout = 2;
+}
+
+# prepare the UDP connection
+my $ts3_sock = IO::Socket::INET->new(
+	Proto    => 'udp',
+	PeerPort => $port,
+	PeerAddr => $host,
+	Timeout  => $timeout,
+) or die "Could not create socket: $!";
+
+# set the timeout variables
+IO::Socket::Timeout->enable_timeouts_on($ts3_sock);
+$ts3_sock->read_timeout($timeout);
+$ts3_sock->write_timeout($timeout);
+
+# first UDP Packet to initialize TS3 voice port connection
+# (Hint: 0x54 0x53 0x33 0x49 0x4e 0x49 0x54 == TS3INIT)
+my $var1 = sprintf "\x54\x53\x33\x49\x4e\x49\x54\x31\x00\x65\x00\x00\x88\x05\x46\x9e\x28\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00";
+# Second UDP Packet
+my $var2 = sprintf "\x90\x58\x0f\x30\xf7\xdd\xdb\x64\x00\x00\x00\x00\x22\x9d\x74\x8b\x45\xaa\x7b\xef\xb9\x9e\xfe\xad\x08\x19\xba\xcf\x41\xe0\x16\xa2\x18\x58\xe4\x98\xf4\xe7\x32\x5e\xe9\xd5\xb2\x29\x2b\x27\xfc\x95\x3e\x71\x02\x9f\x29\x1a\x2d\xc2\x46\xf2\x56\xf4\xf1\x6b\xe7\x7e\xd0\x6a\x70\x99\xaa\x46\xa1\x26\x68\xa2\x3d\x4e\x32\x3b\xe6\x9b\x21\xcc\x73\xb6\xdd\x0a\xbd\xd2\x08\x9d\x81\x5d\x15\xdc\x80\x0b\x08\x41\x5e\x86\x6e\x42\xe2\xf6\x17\x3c\xa9\x8c\x49\xdb\x6e\x92\xe6\xea\x07\xdc\x21\xba\x72\x55\x07\x51\xaf\xdd\xb7\x49\x3b\x33\x2a\x04\xb1\x23\x99\xf6\xe9\x37\x8c\xa2\x4e\xa1\xdd\xb9\x7d\x13\xb6\x37\x29\xa9\x90\x05\x38\xcc\x8b\x8f\x8a\xaa\x8b\xdb\x31\x66\xac\xf6\x9d\x38\x97\x41\xd0\x50\x98\xea\xe1\xee\x5d\x22\xa6\x32\x9a\x28\x68\x58";
+
+# send all the packets!
+$ts3_sock->send($var1) or die "Can't send packet no 1: $!";
+$ts3_sock->send($var2) or die "Can't send packet no 2: $!";
+
+# waiting for an answer
+my ($datagram,$flags);
+$ts3_sock->recv($datagram,32,$flags);
+
+# results and exit codes
+if($datagram=~/TS3INIT/)
+{
+	print "OK - Teamspeak 3 Server is online (".$host.":".$port.")";
+	exit(0);
+}
+elsif($datagram eq "")
+{
+	print "CRITICAL - Teamspeak 3 Server not reachable (".$host.":".$port.")";
+	exit(2);
+}
+else
+{
+	print "WARNING - Teamspeak 3 Server returned invalid answer (".$host.":".$port.")";
+	exit(1);
+}
+
