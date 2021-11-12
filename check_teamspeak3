@@ -19,6 +19,7 @@
 use strict;
 use warnings;
 use IO::Socket;
+use IO::Socket::IP;
 use IO::Socket::Timeout;
 
 sub usage_die()
@@ -44,7 +45,7 @@ if (not defined $timeout)
 }
 
 # prepare the UDP connection
-my $ts3_sock = IO::Socket::INET->new(
+my $ts3_sock = IO::Socket::IP->new(
 	Proto    => 'udp',
 	PeerPort => $port,
 	PeerAddr => $host,
